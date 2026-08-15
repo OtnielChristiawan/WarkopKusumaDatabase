@@ -67,10 +67,12 @@ export function MonthlyChart({
 
             {/* TOOLTIP YANG SUDAH DIPERBAIKI */}
             <Tooltip
-            formatter={(value, name) => [
+              // Memaksa Revenue selalu di paling atas
+              itemSorter={(item) => (item.dataKey === "revenue" ? -1 : 1)}
+              formatter={(value, name) => [
                 `Rp ${Number(value).toLocaleString("id-ID")}`,
-                name // Membiarkan name otomatis mengambil dari prop 'name' di elemen Line
-            ]}
+                name
+              ]}
             />
 
             <Legend />

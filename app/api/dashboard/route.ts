@@ -21,23 +21,24 @@ export async function GET(req: Request) {
       ? "year"
       : "month";
 
-  // Validasi tanggal
+  // =========================================================
+  // VALIDASI TANGGAL
+  // =========================================================
+
   if (start > end) {
     return NextResponse.json(
       {
+        success: false,
         error: "Tanggal awal tidak boleh setelah tanggal akhir.",
       },
       { status: 400 }
     );
   }
 
-  /*
-   * Menentukan grouping trend:
-   *
-   * day   → 2026-08-14
-   * month → 2026-08
-   * year  → 2026
-   */
+  // =========================================================
+  // GROUPING TREND
+  // =========================================================
+
   const periodExpression =
     granularity === "day"
       ? `TO_CHAR(s.order_date, 'YYYY-MM-DD')`
@@ -45,71 +46,23 @@ export async function GET(req: Request) {
       ? `TO_CHAR(s.order_date, 'YYYY')`
       : `TO_CHAR(s.order_date, 'YYYY-MM')`;
 
+  let client;
+
   try {
-    // =========================================================
+    // =======================================================
+    // AMBIL 1 KONEKSI SAJA
+    // =======================================================
+
+    client = await pool.connect();
+
+    // =======================================================
     // 1. KPI
-    // =========================================================
+    // =======================================================
 
-    const kpiQuery = pool.query(
+    const kpi = await client.query(
       `
       SELECT
 
-        -- Total Revenue
-        COALESCE(
-          SUM(
-            CASE
-              WHEN transaction_type <> 'REFUND'
-              THEN amount + rounded_amount
-              ELSE 0
-            END
-          ),
-          0
-        ) AS revenue,
-
-        -- Total Diskon
-        COALESCE(
-          SUM(prorate_discount_billing),
-          0
-        ) AS discount,
-
-        -- Total Qty
-        COALESCE(
-          SUM(
-            CASE
-              WHEN transaction_type <> 'REFUND'
-              THEN qty
-              ELSE 0
-            END
-          ),
-          0
-        ) AS qty,
-
-        -- Total Transaksi
-        COUNT(
-          DISTINCT CASE
-            WHEN transaction_type <> 'REFUND'
-            THEN order_no
-          END
-        ) AS transactions
-
-      FROM fact_sales
-
-      WHERE order_date BETWEEN $1::date AND $2::date
-      `,
-      [start, end]
-    );
-
-    // =========================================================
-    // 2. TREND REVENUE & PROFIT
-    // =========================================================
-
-    const monthlyQuery = pool.query(
-      `
-      SELECT
-
-        ${periodExpression} AS period,
-
-        -- Revenue
         COALESCE(
           SUM(
             CASE
@@ -121,7 +74,59 @@ export async function GET(req: Request) {
           0
         ) AS revenue,
 
-        -- Profit sistem
+        COALESCE(
+          SUM(s.prorate_discount_billing),
+          0
+        ) AS discount,
+
+        COALESCE(
+          SUM(
+            CASE
+              WHEN s.transaction_type <> 'REFUND'
+              THEN s.qty
+              ELSE 0
+            END
+          ),
+          0
+        ) AS qty,
+
+        COUNT(
+          DISTINCT CASE
+            WHEN s.transaction_type <> 'REFUND'
+            THEN s.order_no
+          END
+        ) AS transactions
+
+      FROM fact_sales s
+
+      WHERE
+        s.order_date >= $1::date
+        AND s.order_date < ($2::date + INTERVAL '1 day')
+      `,
+      [start, end]
+    );
+
+    // =======================================================
+    // 2. TREND REVENUE & PROFIT
+    // =======================================================
+
+    const monthly = await client.query(
+      `
+      SELECT
+
+        ${periodExpression} AS period,
+
+        COALESCE(
+          SUM(
+            CASE
+              WHEN s.transaction_type <> 'REFUND'
+              THEN s.amount + s.rounded_amount
+              ELSE 0
+            END
+          ),
+          0
+        ) AS revenue,
+
         COALESCE(
           SUM(
             CASE
@@ -135,7 +140,9 @@ export async function GET(req: Request) {
 
       FROM fact_sales s
 
-      WHERE s.order_date BETWEEN $1::date AND $2::date
+      WHERE
+        s.order_date >= $1::date
+        AND s.order_date < ($2::date + INTERVAL '1 day')
 
       GROUP BY ${periodExpression}
 
@@ -144,17 +151,11 @@ export async function GET(req: Request) {
       [start, end]
     );
 
-    // =========================================================
+    // =======================================================
     // 3. PRODUK TERLARIS
-    // =========================================================
-    //
-    // Ranking berdasarkan QTY.
-    //
-    // Revenue/profit tetap dikirim supaya frontend bisa
-    // menampilkan informasi tambahan kalau diperlukan.
-    //
+    // =======================================================
 
-    const productsQuery = pool.query(
+    const products = await client.query(
       `
       SELECT
 
@@ -164,7 +165,6 @@ export async function GET(req: Request) {
           'UNKNOWN'
         ) AS product_name,
 
-        -- Qty terjual
         COALESCE(
           SUM(
             CASE
@@ -176,7 +176,6 @@ export async function GET(req: Request) {
           0
         ) AS qty,
 
-        -- Revenue produk
         COALESCE(
           SUM(
             CASE
@@ -188,7 +187,6 @@ export async function GET(req: Request) {
           0
         ) AS sales,
 
-        -- Profit sistem
         COALESCE(
           SUM(
             CASE
@@ -205,7 +203,9 @@ export async function GET(req: Request) {
       LEFT JOIN dim_product p
         ON s.product_key = p.product_key
 
-      WHERE s.order_date BETWEEN $1::date AND $2::date
+      WHERE
+        s.order_date >= $1::date
+        AND s.order_date < ($2::date + INTERVAL '1 day')
 
       GROUP BY
         COALESCE(
@@ -221,74 +221,70 @@ export async function GET(req: Request) {
       [start, end]
     );
 
-    // =========================================================
+    // =======================================================
     // 4. PAYMENT MIX
-    // =========================================================
+    // =======================================================
 
-    const paymentsQuery = pool.query(`
-    SELECT
+    const payments = await client.query(
+      `
+      SELECT
+
         COALESCE(
-            NULLIF(TRIM(dp.payment_type), ''),
-            'Unknown'
+          NULLIF(TRIM(dp.payment_type), ''),
+          'Unknown'
         ) AS payment_type,
 
         COALESCE(
-            SUM(
-                CASE
-                    WHEN s.transaction_type <> 'REFUND'
-                    THEN s.amount + s.rounded_amount
-                    ELSE 0
-                END
-            ),
-            0
+          SUM(
+            CASE
+              WHEN s.transaction_type <> 'REFUND'
+              THEN s.amount + s.rounded_amount
+              ELSE 0
+            END
+          ),
+          0
         ) AS revenue
 
-    FROM fact_sales s
+      FROM fact_sales s
 
-    LEFT JOIN dim_payment dp
+      LEFT JOIN dim_payment dp
         ON s.payment_key = dp.payment_key
 
-    WHERE
-        s.order_date BETWEEN $1::date AND $2::date
+      WHERE
+        s.order_date >= $1::date
+        AND s.order_date < ($2::date + INTERVAL '1 day')
         AND s.transaction_type <> 'REFUND'
 
-    GROUP BY
+      GROUP BY
         COALESCE(
-            NULLIF(TRIM(dp.payment_type), ''),
-            'Unknown'
+          NULLIF(TRIM(dp.payment_type), ''),
+          'Unknown'
         )
 
-    HAVING
+      HAVING
         SUM(
-            CASE
-                WHEN s.transaction_type <> 'REFUND'
-                THEN s.amount + s.rounded_amount
-                ELSE 0
-            END
+          CASE
+            WHEN s.transaction_type <> 'REFUND'
+            THEN s.amount + s.rounded_amount
+            ELSE 0
+          END
         ) <> 0
 
-    ORDER BY revenue DESC
-`, [start, end]);
+      ORDER BY revenue DESC
+      `,
+      [start, end]
+    );
 
-    // =========================================================
+    // =======================================================
     // 5. TREND JAM RAMAI
-    // =========================================================
-    //
-    // Menggunakan transaction_hour.
-    //
-    // Contoh:
-    // 18 → revenue jam 18
-    // 19 → revenue jam 19
-    // dst.
-    //
+    // =======================================================
 
-    const hoursQuery = pool.query(
+    const hours = await client.query(
       `
       SELECT
 
         s.transaction_hour AS hour,
 
-        -- Revenue per jam
         COALESCE(
           SUM(
             CASE
@@ -300,7 +296,6 @@ export async function GET(req: Request) {
           0
         ) AS revenue,
 
-        -- Jumlah transaksi per jam
         COUNT(
           DISTINCT CASE
             WHEN s.transaction_type <> 'REFUND'
@@ -310,7 +305,9 @@ export async function GET(req: Request) {
 
       FROM fact_sales s
 
-      WHERE s.order_date BETWEEN $1::date AND $2::date
+      WHERE
+        s.order_date >= $1::date
+        AND s.order_date < ($2::date + INTERVAL '1 day')
 
         AND s.transaction_hour BETWEEN 0 AND 23
 
@@ -323,27 +320,9 @@ export async function GET(req: Request) {
       [start, end]
     );
 
-    // =========================================================
-    // JALANKAN SEMUA QUERY
-    // =========================================================
-
-    const [
-      kpi,
-      monthly,
-      products,
-      payments,
-      hours,
-    ] = await Promise.all([
-      kpiQuery,
-      monthlyQuery,
-      productsQuery,
-      paymentsQuery,
-      hoursQuery,
-    ]);
-
-    // =========================================================
+    // =======================================================
     // RESPONSE
-    // =========================================================
+    // =======================================================
 
     return NextResponse.json({
       success: true,
@@ -367,19 +346,24 @@ export async function GET(req: Request) {
 
   } catch (error: any) {
 
-    console.error(
-      "Dashboard API Error:",
-      error
-    );
+    console.error("Dashboard API Error:", error);
 
     return NextResponse.json(
       {
         success: false,
-        error:
-          error?.message ||
-          "Database error",
+        error: error?.message || "Database error",
       },
       { status: 500 }
     );
+
+  } finally {
+
+    // =======================================================
+    // WAJIB: KEMBALIKAN KONEKSI KE POOL
+    // =======================================================
+
+    if (client) {
+      client.release();
+    }
   }
 }
