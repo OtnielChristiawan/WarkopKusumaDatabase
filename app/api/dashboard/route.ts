@@ -46,6 +46,25 @@ export async function GET(req: Request) {
       ? `TO_CHAR(s.order_date, 'YYYY')`
       : `TO_CHAR(s.order_date, 'YYYY-MM')`;
 
+  // =========================================================
+  // HITUNG PERIOD SEBELUMNYA UNTUK GROWTH
+  // =========================================================
+
+  const daysDiff = Math.ceil(
+    (new Date(end).getTime() - new Date(start).getTime()) /
+      (1000 * 60 * 60 * 24)
+  );
+
+  const prevEnd = new Date(new Date(start).getTime() - 1000 * 60 * 60 * 24)
+    .toISOString()
+    .slice(0, 10);
+
+  const prevStart = new Date(
+    new Date(prevEnd).getTime() - daysDiff * 1000 * 60 * 60 * 24
+  )
+    .toISOString()
+    .slice(0, 10);
+
   let client;
 
   try {
@@ -104,6 +123,57 @@ export async function GET(req: Request) {
         AND s.order_date < ($2::date + INTERVAL '1 day')
       `,
       [start, end]
+    );
+
+    // =======================================================
+    // 1B. KPI PREVIOUS PERIOD (UNTUK GROWTH)
+    // =======================================================
+
+    const kpiPrevious = await client.query(
+      `
+      SELECT
+
+        COALESCE(
+          SUM(
+            CASE
+              WHEN s.transaction_type <> 'REFUND'
+              THEN s.amount + s.rounded_amount
+              ELSE 0
+            END
+          ),
+          0
+        ) AS revenue,
+
+        COALESCE(
+          SUM(s.prorate_discount_billing),
+          0
+        ) AS discount,
+
+        COALESCE(
+          SUM(
+            CASE
+              WHEN s.transaction_type <> 'REFUND'
+              THEN s.qty
+              ELSE 0
+            END
+          ),
+          0
+        ) AS qty,
+
+        COUNT(
+          DISTINCT CASE
+            WHEN s.transaction_type <> 'REFUND'
+            THEN s.order_no
+          END
+        ) AS transactions
+
+      FROM fact_sales s
+
+      WHERE
+        s.order_date >= $1::date
+        AND s.order_date < ($2::date + INTERVAL '1 day')
+      `,
+      [prevStart, prevEnd]
     );
 
     // =======================================================
@@ -387,6 +457,8 @@ export async function GET(req: Request) {
       },
 
       kpi: kpi.rows[0],
+
+      kpi_previous: kpiPrevious.rows[0],
 
       monthly: monthly.rows,
 

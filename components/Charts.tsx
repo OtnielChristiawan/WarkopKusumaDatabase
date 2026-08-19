@@ -14,6 +14,11 @@ import {
   Pie,
   Cell,
   Legend,
+  ComposedChart,
+  Area,
+  ScatterChart,
+  Scatter,
+  ZAxis,
 } from "recharts";
 
 // ============================================================
@@ -336,4 +341,29 @@ export function HourChart({
       </BarChart>
     </ResponsiveContainer>
   );
+}
+
+export function SalesTrendChart({ data }: { data: any[] }) {
+  return <ResponsiveContainer width="100%" height={290}><ComposedChart data={data}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="date" tick={{ fontSize: 10 }} /><YAxis tickFormatter={(value) => `${Math.round(Number(value) / 1000000)}jt`} /><Tooltip formatter={(value: any, name: any) => [money(value), name]} /><Legend /><Area type="monotone" dataKey="gross_sales" name="Gross Sales" fill="#dbeafe" stroke={BLUE} strokeWidth={2} /><Line type="monotone" dataKey="net_sales" name="Net Sales" stroke={RED} strokeWidth={2} dot={false} /></ComposedChart></ResponsiveContainer>;
+}
+
+export function RevenueContributionChart({ data }: { data: any[] }) {
+  const chartData = data.slice(0, 8);
+  if (!chartData.length) return <div className="empty-chart">Belum ada data produk pada periode ini.</div>;
+  return <ResponsiveContainer width="100%" height={290}><BarChart data={chartData} layout="vertical"><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" tickFormatter={(value) => `${Number(value).toFixed(0)}%`} /><YAxis type="category" dataKey="product_name" width={115} tick={{ fontSize: 10 }} /><Tooltip formatter={(value: any) => [`${Number(value).toFixed(2)}%`, "Kontribusi omzet"]} /><Bar dataKey="revenueContribution" name="Kontribusi omzet" fill={BLUE} radius={[0, 5, 5, 0]} /></BarChart></ResponsiveContainer>;
+}
+
+export function QuantityRevenueChart({ data }: { data: any[] }) {
+  const chartData = data.map((item) => ({ ...item, qty: Number(item.qty || 0), revenue: Number(item.revenue || 0) }));
+  if (!chartData.length) return <div className="empty-chart">Belum ada data produk pada periode ini.</div>;
+  return <ResponsiveContainer width="100%" height={290}><ScatterChart><CartesianGrid /><XAxis type="number" dataKey="qty" name="Quantity" /><YAxis type="number" dataKey="revenue" name="Revenue" tickFormatter={(value) => `${Math.round(Number(value) / 1000000)}jt`} /><ZAxis type="number" dataKey="qty" range={[50, 300]} /><Tooltip content={({ active, payload }) => active && payload?.length ? <div className="chart-tooltip"><strong>{payload[0].payload.product_name}</strong><span>Qty: {Number(payload[0].payload.qty).toLocaleString("id-ID")}</span><span>Revenue: {money(payload[0].payload.revenue)}</span></div> : null} /><Scatter name="Produk" data={chartData} fill={RED} /></ScatterChart></ResponsiveContainer>;
+}
+
+export function DiscountImpactChart({ data }: { data: any[] }) {
+  return <ResponsiveContainer width="100%" height={290}><ComposedChart data={data}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="date" tick={{ fontSize: 10 }} /><YAxis tickFormatter={(value) => `${Math.round(Number(value) / 1000000)}jt`} /><Tooltip formatter={(value: any, name: any) => [money(value), name]} /><Legend /><Bar dataKey="gross_sales" name="Gross Sales" fill="#8fa8d0" /><Bar dataKey="net_sales" name="Net Sales" fill={BLUE} /></ComposedChart></ResponsiveContainer>;
+}
+
+export function RefundChart({ data }: { data: any[] }) {
+  if (!data.length) return <div className="empty-chart">Belum ada refund pada periode ini.</div>;
+  return <ResponsiveContainer width="100%" height={220}><BarChart data={data} layout="vertical"><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" tickFormatter={(value) => `${Math.round(Number(value) / 1000)}k`} /><YAxis type="category" dataKey="product_name" width={115} tick={{ fontSize: 10 }} /><Tooltip formatter={(value: any) => [money(value), "Nilai refund"]} /><Bar dataKey="revenue" name="Nilai refund" fill={RED} radius={[0, 5, 5, 0]} /></BarChart></ResponsiveContainer>;
 }

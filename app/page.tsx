@@ -43,6 +43,12 @@ type D = {
     qty: number;
     transactions: number;
   };
+  kpi_previous: {
+    revenue: number;
+    discount: number;
+    qty: number;
+    transactions: number;
+  };
   monthly: any[];
   products: any[];
   payments: Payment[];
@@ -87,7 +93,7 @@ function de() {
 export default function Home() {
   const [start, setStart] = useState(ds());
   const [end, setEnd] = useState(de());
-  const [granularity, setGranularity] = useState<G>("month");
+  const [granularity, setGranularity] = useState<G>("day");
 
   const [data, setData] = useState<D | null>(null);
   const [loading, setLoading] = useState(true);
@@ -121,6 +127,13 @@ export default function Home() {
           discount: Number(json.kpi?.discount || 0),
           qty: Number(json.kpi?.qty || 0),
           transactions: Number(json.kpi?.transactions || 0),
+        },
+
+        kpi_previous: {
+          revenue: Number(json.kpi_previous?.revenue || 0),
+          discount: Number(json.kpi_previous?.discount || 0),
+          qty: Number(json.kpi_previous?.qty || 0),
+          transactions: Number(json.kpi_previous?.transactions || 0),
         },
 
         monthly: (json.monthly || []).map((item: any) => ({
@@ -190,10 +203,9 @@ export default function Home() {
             Beranda
           </a>
 
-          <a>
+          <a href="/penjualan">
             <ShoppingBag />
             Penjualan
-            <small>soon</small>
           </a>
 
           <a>
@@ -242,6 +254,7 @@ export default function Home() {
             onClick={load}
             type="button"
             aria-label="Refresh data"
+            suppressHydrationWarning
           >
             <RefreshCw size={18} />
           </button>
@@ -285,6 +298,7 @@ export default function Home() {
                   onChange={(e) =>
                     setGranularity(e.target.value as G)
                   }
+                  suppressHydrationWarning
                 >
                   <option value="day">Per Hari</option>
                   <option value="month">Per Bulan</option>
@@ -305,24 +319,53 @@ export default function Home() {
           <Kpi
             title="Total Sales Bersih"
             value={money(data?.kpi.revenue)}
+            growth={
+              data?.kpi.revenue && data?.kpi_previous.revenue
+                ? ((data.kpi.revenue - data.kpi_previous.revenue) /
+                    data.kpi_previous.revenue) *
+                  100
+                : undefined
+            }
             accent="blue"
           />
 
           <Kpi
             title="Total Diskon"
             value={money(data?.kpi.discount)}
+            growth={
+              data?.kpi.discount && data?.kpi_previous.discount
+                ? ((data.kpi.discount - data.kpi_previous.discount) /
+                    data.kpi_previous.discount) *
+                  100
+                : undefined
+            }
             accent="red"
+            isDiscount={true}
           />
 
           <Kpi
             title="Total Qty Terjual"
             value={num(data?.kpi.qty)}
+            growth={
+              data?.kpi.qty && data?.kpi_previous.qty
+                ? ((data.kpi.qty - data.kpi_previous.qty) /
+                    data.kpi_previous.qty) *
+                  100
+                : undefined
+            }
             accent="navy"
           />
 
           <Kpi
             title="Total Transaksi"
             value={num(data?.kpi.transactions)}
+            growth={
+              data?.kpi.transactions && data?.kpi_previous.transactions
+                ? ((data.kpi.transactions - data.kpi_previous.transactions) /
+                    data.kpi_previous.transactions) *
+                  100
+                : undefined
+            }
             accent="red"
           />
         </section>
@@ -361,6 +404,34 @@ export default function Home() {
         </section>
 
         <style jsx global>{`
+          .kpi-growth {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-top: 8px;
+            font-size: 13px;
+            font-weight: 600;
+          }
+
+          /* Pastikan warna diterapkan ke seluruh elemen didalamnya */
+          .kpi-growth.positive,
+          .kpi-growth.positive .growth-icon,
+          .kpi-growth.positive .growth-text {
+            color: #10b981 !important; /* Hijau */
+          }
+
+          .kpi-growth.negative,
+          .kpi-growth.negative .growth-icon,
+          .kpi-growth.negative .growth-text {
+            color: #ef4444 !important; /* Merah */
+          }
+
+          .kpi-growth.neutral,
+          .kpi-growth.neutral .growth-icon,
+          .kpi-growth.neutral .growth-text {
+            color: #64748b !important; /* Abu-abu */
+          }
+
           .asymmetric-grid {
             grid-template-columns: repeat(10, minmax(0, 1fr));
           }
@@ -414,17 +485,46 @@ export default function Home() {
 function Kpi({
   title,
   value,
+  growth,
   accent,
+  isDiscount = false,
 }: {
   title: string;
   value: string;
+  growth?: number;
   accent: string;
+  isDiscount?: boolean;
 }) {
+  const g = Number(growth || 0);
+  const growthPercent = Math.abs(g).toFixed(1);
+
+  // Arah tren riil (apakah angkanya naik atau turun)
+  const isUp = g > 0;
+  const isDown = g < 0;
+
+  // Logika warna bisnis:
+  // Untuk Diskon: Turun = Bagus (Hijau), Naik = Jelek (Merah)
+  // Untuk Lainnya: Naik = Bagus (Hijau), Turun = Jelek (Merah)
+  let statusClass = "neutral"; // Warna default/abu-abu jika 0%
+  if (g !== 0) {
+    const isGood = isDiscount ? isDown : isUp;
+    statusClass = isGood ? "positive" : "negative";
+  }
+
   return (
     <div className={`kpi ${accent}`}>
       <span>{title}</span>
 
       <strong>{value}</strong>
+
+      {growth !== undefined && (
+        <div className={`kpi-growth ${statusClass}`}>
+          <span className="growth-icon">
+            {isUp ? "↑" : isDown ? "↓" : "→"}
+          </span>
+          <span className="growth-text">{growthPercent}%</span>
+        </div>
+      )}
 
       <div className="kpi-line" />
     </div>
