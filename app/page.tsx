@@ -7,6 +7,7 @@ import {
   RefreshCw,
   Settings,
   ShoppingBag,
+  Package,
   WalletCards,
   ChevronDown,
 } from "lucide-react";
@@ -196,6 +197,12 @@ export default function Home() {
           </a>
 
           <a>
+            <Package />
+            Produk
+            <small>soon</small>
+          </a>
+
+          <a>
             <WalletCards />
             Keuangan
             <small>soon</small>
@@ -331,27 +338,64 @@ export default function Home() {
         </div>
 
         {/* CHARTS */}
-        <section className="chart-grid">
+        <section className="chart-grid asymmetric-grid">
           <Card title="Trend Revenue & Profit" wide>
             <MonthlyChart data={data?.monthly || []} />
           </Card>
 
-          <Card title="Produk Terlaris">
+          <Card title="Produk Terlaris" className="short-left">
             <ProductChart data={data?.products || []} />
           </Card>
 
-          <Card title="Payment Mix">
-            <PaymentChart data={data?.payments || []} />
-          </Card>
-
-          <Card title="Trend Jam Ramai">
+          <Card title="Trend Jam Ramai" className="long-right">
             <HourChart data={data?.hours || []} />
           </Card>
 
-          <Card title="Revenue per Hari dalam Seminggu" wide>
+          <Card title="Revenue per Hari dalam Seminggu" className="long-left">
             <WeekdayChart data={data?.weekdays || []} />
           </Card>
+
+          <Card title="Payment Mix" className="short-right">
+            <PaymentChart data={data?.payments || []} />
+          </Card>
         </section>
+
+        <style jsx global>{`
+          .asymmetric-grid {
+            grid-template-columns: repeat(10, minmax(0, 1fr));
+          }
+
+          .asymmetric-grid .wide {
+            grid-column: 1 / -1;
+          }
+
+          .asymmetric-grid .short-left,
+          .asymmetric-grid .short-right {
+            grid-column: span 4;
+          }
+
+          .asymmetric-grid .long-right {
+            grid-column: span 6;
+          }
+
+          .asymmetric-grid .long-left {
+            grid-column: span 6;
+          }
+
+          @media (max-width: 720px) {
+            .asymmetric-grid {
+              grid-template-columns: 1fr;
+            }
+
+            .asymmetric-grid .wide,
+            .asymmetric-grid .short-left,
+            .asymmetric-grid .long-left,
+            .asymmetric-grid .long-right,
+            .asymmetric-grid .short-right {
+              grid-column: auto;
+            }
+          }
+        `}</style>
 
         <footer>
           © {new Date().getFullYear()} Warkop Kusuma · Analytics Dashboard
@@ -391,13 +435,15 @@ function Card({
   title,
   children,
   wide = false,
+  className = "",
 }: {
   title: string;
   children: React.ReactNode;
   wide?: boolean;
+  className?: string;
 }) {
   return (
-    <article className={`chart-card ${wide ? "wide" : ""}`}>
+    <article className={`chart-card ${wide ? "wide" : ""} ${className}`}>
       <div className="chart-title">{title}</div>
 
       {children}

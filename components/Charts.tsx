@@ -147,7 +147,6 @@ export function WeekdayChart({ data }: { data: any[] }) {
     </ResponsiveContainer>
   );
 }
-
 // ============================================================
 // 3. TOP PRODUCTS
 // ============================================================
@@ -166,6 +165,12 @@ export function ProductChart({
       </div>
     );
   }
+
+  // 1. Cari nilai qty tertinggi dari data produk
+  const maxQty = Math.max(...chartData.map((item) => Number(item.qty || 0)), 0);
+
+  // 2. Bulatkan ke kelipatan 50 terdekat ke atas (misal: 410 jadi 450)
+  const dynamicMax = Math.ceil(maxQty / 50) * 50;
 
   return (
     <ResponsiveContainer width="100%" height={290}>
@@ -187,6 +192,7 @@ export function ProductChart({
         <XAxis
           type="number"
           allowDecimals={false}
+          domain={[0, dynamicMax]} // 3. Terapkan batas maksimal dinamis di sini
         />
 
         <YAxis
