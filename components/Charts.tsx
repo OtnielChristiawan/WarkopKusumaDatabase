@@ -102,7 +102,54 @@ export function MonthlyChart({
 }
 
 // ============================================================
-// 2. TOP PRODUCTS
+// 2. REVENUE PER WEEKDAY
+// ============================================================
+
+export function WeekdayChart({ data }: { data: any[] }) {
+  const chartData = data.map((item) => ({
+    day: item.day_name,
+    revenue: Number(item.revenue || 0),
+    transactions: Number(item.transactions || 0),
+  }));
+
+  return (
+    <ResponsiveContainer width="100%" height={280}>
+      <BarChart
+        data={chartData}
+        margin={{
+          top: 10,
+          right: 10,
+          left: 10,
+          bottom: 10,
+        }}
+      >
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="day" />
+        <YAxis
+          tickFormatter={(value) =>
+            `${(value / 1000000).toFixed(0)}M`
+          }
+        />
+        <Tooltip
+          formatter={(value, name) =>
+            name === "Revenue"
+              ? `Rp ${Number(value).toLocaleString("id-ID")}`
+              : Number(value).toLocaleString("id-ID")
+          }
+        />
+        <Bar
+          dataKey="revenue"
+          name="Revenue"
+          fill={BLUE}
+          radius={[6, 6, 0, 0]}
+        />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+// ============================================================
+// 3. TOP PRODUCTS
 // ============================================================
 
 export function ProductChart({
@@ -170,7 +217,7 @@ export function ProductChart({
 }
 
 // ============================================================
-// 3. PAYMENT MIX
+// 4. PAYMENT MIX
 // ============================================================
 export function PaymentChart({ data }: { data: any[] }) {
     if (!data.length) {
@@ -213,7 +260,7 @@ export function PaymentChart({ data }: { data: any[] }) {
 }
 
 // ============================================================
-// 4. BUSIEST HOURS
+// 5. BUSIEST HOURS
 // ============================================================
 
 export function HourChart({

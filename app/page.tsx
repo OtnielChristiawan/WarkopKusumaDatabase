@@ -13,6 +13,7 @@ import {
 
 import {
   MonthlyChart,
+  WeekdayChart,
   ProductChart,
   PaymentChart,
   HourChart,
@@ -45,6 +46,7 @@ type D = {
   products: any[];
   payments: Payment[];
   hours: any[];
+  weekdays: any[];
 };
 
 function formatDate(date: Date) {
@@ -124,6 +126,13 @@ export default function Home() {
           ...item,
           revenue: Number(item.revenue || 0),
           profit: Number(item.profit || 0),
+        })),
+
+        weekdays: (json.weekdays || []).map((item: any) => ({
+          day_number: Number(item.day_number || 0),
+          day_name: String(item.day_name || ""),
+          revenue: Number(item.revenue || 0),
+          transactions: Number(item.transactions || 0),
         })),
 
         products: (json.products || []).map((item: any) => ({
@@ -337,6 +346,10 @@ export default function Home() {
 
           <Card title="Trend Jam Ramai">
             <HourChart data={data?.hours || []} />
+          </Card>
+
+          <Card title="Revenue per Hari dalam Seminggu" wide>
+            <WeekdayChart data={data?.weekdays || []} />
           </Card>
         </section>
 

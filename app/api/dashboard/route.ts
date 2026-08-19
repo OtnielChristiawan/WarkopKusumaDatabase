@@ -152,6 +152,59 @@ export async function GET(req: Request) {
     );
 
     // =======================================================
+    // 2B. REVENUE PER HARI DALAM SEMINGGU
+    // =======================================================
+
+    const weekdays = await client.query(
+      `
+      SELECT
+
+        EXTRACT(ISODOW FROM s.order_date)::int AS day_number,
+
+        CASE EXTRACT(ISODOW FROM s.order_date)::int
+          WHEN 1 THEN 'Senin'
+          WHEN 2 THEN 'Selasa'
+          WHEN 3 THEN 'Rabu'
+          WHEN 4 THEN 'Kamis'
+          WHEN 5 THEN 'Jumat'
+          WHEN 6 THEN 'Sabtu'
+          WHEN 7 THEN 'Minggu'
+        END AS day_name,
+
+        COALESCE(
+          SUM(
+            CASE
+              WHEN s.transaction_type <> 'REFUND'
+              THEN s.amount + s.rounded_amount
+              ELSE 0
+            END
+          ),
+          0
+        ) AS revenue,
+
+        COUNT(
+          DISTINCT CASE
+            WHEN s.transaction_type <> 'REFUND'
+            THEN s.order_no
+          END
+        ) AS transactions
+
+      FROM fact_sales s
+
+      WHERE
+        s.order_date >= $1::date
+        AND s.order_date < ($2::date + INTERVAL '1 day')
+
+      GROUP BY
+        EXTRACT(ISODOW FROM s.order_date)::int
+
+      ORDER BY
+        day_number
+      `,
+      [start, end]
+    );
+
+    // =======================================================
     // 3. PRODUK TERLARIS
     // =======================================================
 
@@ -336,6 +389,8 @@ export async function GET(req: Request) {
       kpi: kpi.rows[0],
 
       monthly: monthly.rows,
+
+      weekdays: weekdays.rows,
 
       products: products.rows,
 
